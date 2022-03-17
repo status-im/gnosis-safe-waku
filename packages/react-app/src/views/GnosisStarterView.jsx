@@ -1,13 +1,44 @@
 import { Button, Card, DatePicker, Divider, Input, List, Progress, Slider, Spin, Switch, notification } from "antd";
 import React, { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
-import SafeServiceClient from '@gnosis.pm/safe-service-client'
 import { Address, Balance, EtherInput, AddressInput } from "../components";
 import { usePoller, useLocalStorage, useBalance, useSafeSdk } from "../hooks";
 import { EthSignSignature } from './EthSignSignature'
 import WalletConnect from "@walletconnect/client";
+import { Waku, WakuMessage, utils } from "js-waku";
+import { keccak256 } from "ethers/lib/utils";
+import protons from "protons";
+import {hexToBytes} from "js-waku/build/main/lib/utils";
 
-const serviceClient = new SafeServiceClient('https://safe-transaction.rinkeby.gnosis.io')
+// Waku message format
+const proto = protons(`
+message WakuSafeMessage {
+  required string txHash = 1;  
+  repeated WakuSafeSignature signatures = 2;
+  required WakuSafeTransactionData transactionData = 3;
+  optional uint64 done = 4;
+  optional string version = 5;
+}
+
+message WakuSafeSignature {
+  required string signer = 1;
+  required string signature = 2;
+}
+
+message WakuSafeTransactionData {
+  required string to = 1;
+  required string value = 2;
+  required string data = 3;
+  required uint64 operation = 4;
+  required uint64 safeTxGas = 5;
+  required uint64 baseGas = 6;
+  required uint64 gasPrice = 7;
+  required string gasToken = 8;
+  required string refundReceiver = 9;
+  required uint64 nonce = 10;
+}
+`);
+const VERSION = "v1";
 
 export default function GnosisStarterView({
   userSigner,
@@ -26,10 +57,12 @@ export default function GnosisStarterView({
   const [selector, setSelector] = useState('')
   const [params, setParams] = useState([])
   const [data, setData] = useState('0x00')
+  const [waku, setWaku] = React.useState(undefined);
+  const [wakuStatus, setWakuStatus] = React.useState("None");
 
   const OWNERS = [
-    "0x34aA3F359A9D614239015126635CE7732c18fDF3",
-    "0xa81a6a910FeD20374361B35C451a4a44F86CeD46"
+    "0x7F2436d628137A1a4f07631b1E09e37455f4aDAe",
+    "0xCdBD6e282cE2A0f5244883F4D8e70dA0dA62aa13"
   ]
   const THRESHOLD = 2
 
@@ -39,6 +72,57 @@ export default function GnosisStarterView({
   const { safeSdk, safeFactory } = useSafeSdk(userSigner, safeAddress)
 
   const isSafeOwnerConnected = owners.includes(address)
+
+  useEffect(() => {
+    if (!safeAddress) return;
+    // If Waku status is Connected, return
+    if (wakuStatus === "Connected") return;
+    // If Waku status is None, it means we need to start Waku;
+    if (wakuStatus === "None") {
+      setWakuStatus("Starting");
+      const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+      // Create Waku
+      Waku.create({
+        bootstrap: { default: true },
+        decryptionKeys: [utils.hexToBytes(
+          keccak256(Buffer.from(contentTopic, "utf-8"))
+        )]
+      }).then((waku) => {
+        // Once done, put it in the state
+        setWaku(waku);
+        // And update the status
+        setWakuStatus("Connecting");
+      });
+    }
+
+    // If Waku status is Connecting, it means we need to wait for the Waku peers to be ready;
+    if (wakuStatus === "Connecting") {
+      waku.waitForRemotePeer().then(() => {
+        setWakuStatus("Connected");
+      });
+    }
+  }, [waku, wakuStatus]);
+
+  const wakuLightPush = async (message, contentTopic) => {
+    console.log("Waku Light Push:", message);
+    const encodedMessage = encodeWakuSafeSignatureMsg(message);
+    const wakuMessage = await WakuMessage.fromBytes(encodedMessage, contentTopic, {
+      symKey: hexToBytes(
+        keccak256(Buffer.from(contentTopic, "utf-8"))
+      )
+    });
+    const ack = await waku.lightPush.push(wakuMessage);
+    if (!ack?.isSuccess) {
+      notification.open({
+        message: "🛑 Error Proposing Transaction To Waku Network",
+        description: (
+          <>
+            {message.toString()} (check console)
+          </>
+        ),
+      });
+    }
+  }
 
   const deploySafe = useCallback(async (owners, threshold) => {
     if (!safeFactory) return
@@ -57,7 +141,7 @@ export default function GnosisStarterView({
   }, [safeFactory])
 
   const proposeSafeTransaction = useCallback(async (transaction) => {
-    if (!safeSdk || !serviceClient) return
+    if (!safeSdk) return
     let safeTransaction
     try {
       safeTransaction = await safeSdk.createTransaction(transaction)
@@ -69,45 +153,56 @@ export default function GnosisStarterView({
     const safeTxHash = await safeSdk.getTransactionHash(safeTransaction)
     console.log('HASH', safeTxHash)
     const safeSignature = await safeSdk.signTransactionHash(safeTxHash)
-    await serviceClient.proposeTransaction(
-      safeAddress,
-      safeTransaction.data,
-      safeTxHash,
-      safeSignature
-    )
-  }, [safeSdk, serviceClient, safeAddress])
+
+    // Here we send our signature message to the Waku network;
+    await waku.waitForRemotePeer(); // wait for the light push peer to be ready;
+    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    const message = {
+      txHash: safeTxHash,
+      signatures: [{
+        signer: safeSignature.signer,
+        signature: safeSignature.data
+      }],
+      transactionData: {
+        to: safeTransaction.data.to,
+        value: safeTransaction.data.value,
+        data: safeTransaction.data.data || '0x',
+        operation: safeTransaction.data.operation,
+        safeTxGas: safeTransaction.data.safeTxGas,
+        baseGas: safeTransaction.data.baseGas,
+        gasPrice: Number(safeTransaction.data.gasPrice),
+        gasToken: safeTransaction.data.gasToken,
+        refundReceiver: safeTransaction.data.refundReceiver,
+        nonce: safeTransaction.data.nonce
+      },
+      done: 0,
+      version: VERSION,
+    }
+    await wakuLightPush(message, contentTopic);
+  }, [safeSdk, safeAddress])
 
   const confirmTransaction = useCallback(async (transaction) => {
-    if (!safeSdk || !serviceClient) return
-    const hash = transaction.safeTxHash
-    let signature
+    if (!safeSdk) return;
+    const hash = transaction.txHash;
+    let signature;
     try {
-      signature = await safeSdk.signTransactionHash(hash)
+      signature = await safeSdk.signTransactionHash(hash);
     } catch (error) {
-      console.error(error)
-      return
+      console.error(error);
+      return;
     }
-    await serviceClient.confirmTransaction(hash, signature.data)
-  }, [safeSdk, serviceClient])
+    const newMessage = transaction;
+    newMessage.signatures.push({signer: signature.signer, signature: signature.data});
+    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    await wakuLightPush(newMessage, contentTopic);
+  }, [safeSdk, safeAddress])
 
   const executeSafeTransaction = useCallback(async (transaction) => {
     if (!safeSdk) return
-    console.log(transaction)
-    const safeTransactionData = {
-      to: transaction.to,
-      value: transaction.value,
-      data: transaction.data || '0x',
-      operation: transaction.operation,
-      safeTxGas: transaction.safeTxGas,
-      baseGas: transaction.baseGas,
-      gasPrice: Number(transaction.gasPrice),
-      gasToken: transaction.gasToken,
-      refundReceiver: transaction.refundReceiver,
-      nonce: transaction.nonce
-    }
+    const safeTransactionData = transaction.transactionData;
     const safeTransaction = await safeSdk.createTransaction(safeTransactionData)
-    transaction.confirmations.forEach(confirmation => {
-      const signature = new EthSignSignature(confirmation.owner, confirmation.signature)
+    transaction.signatures.forEach(confirmation => {
+      const signature = new EthSignSignature(confirmation.signer, confirmation.signature)
       safeTransaction.addSignature(signature)
     })
     let executeTxResponse
@@ -119,32 +214,92 @@ export default function GnosisStarterView({
     }
     const receipt = executeTxResponse.transactionResponse && (await executeTxResponse.transactionResponse.wait())
     console.log(receipt)
+    const newMessage = transaction;
+    newMessage.done = 1;
+    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    await wakuLightPush(newMessage, contentTopic);
   }, [safeSdk])
 
-  const isTransactionExecutable = (transaction) => transaction.confirmations.length >= threshold
+  const isTransactionExecutable = (transaction) => transaction.signatures.length >= threshold
 
   const isTransactionSignedByAddress = (transaction) => {
-    const confirmation = transaction.confirmations.find(confirmation => confirmation.owner === address)
+    const confirmation = transaction.signatures.find(signature => signature.signer === address)
     return !!confirmation
   }
 
+  const encodeWakuSafeSignatureMsg = useCallback((wakuMessage) => {
+    return proto.WakuSafeMessage.encode(wakuMessage)
+  }, []);
 
+  const decodeWakuSafeSignatureMsg = useCallback((wakuMessage) => {
+    if (!wakuMessage.payload) return;
+
+    const { txHash, signatures, transactionData, done, version } = proto.WakuSafeMessage.decode(
+      wakuMessage.payload
+    );
+
+    // All fields in protobuf are optional so be sure to check
+    if (!txHash || !signatures || !transactionData) return;
+    const transaction = {
+      txHash: txHash,
+      signatures: signatures,
+      transactionData: transactionData,
+      done: done,
+      version: version,
+    };
+    if (!transaction.version || transaction.version !== VERSION)
+      return // drop messages with different version
+    console.log("Waku Message Decoded:", transaction);
+    // update messages with the same txHash
+    let memTransactions = transactions.filter(tx => tx.txHash !== transaction.txHash);
+    memTransactions.push(transaction);
+    // clean done message
+    memTransactions = memTransactions.filter(tx => typeof tx.done !== 'undefined' && tx.done === 0);
+    console.log("mem", memTransactions);
+    setTransactions(memTransactions);
+  }, []);
+
+  React.useEffect(() => {
+    if (!waku) return;
+
+    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+
+    // Pass the content topic to only process messages related to your dApp
+    waku.relay.addObserver(decodeWakuSafeSignatureMsg, [contentTopic]);
+
+    if (wakuStatus === "Connected") {
+      console.log("Loading messages from Waku Store");
+      const processWakuStoreMessages = (retrievedMessages) => {
+        retrievedMessages.map(decodeWakuSafeSignatureMsg).filter(Boolean);
+      };
+      waku.store
+        .queryHistory([contentTopic], { callback: processWakuStoreMessages })
+        .catch((e) => {
+          console.log("Failed to retrieve messages", e);
+        });
+    }
+
+    // `cleanUp` is called when the component is unmounted, see ReactJS doc.
+    return function cleanUp() {
+      waku.relay.deleteObserver(decodeWakuSafeSignatureMsg, [contentTopic]);
+    };
+  }, [waku, wakuStatus, decodeWakuSafeSignatureMsg, safeAddress]);
 
   usePoller(async () => {
     if(safeAddress){
-      setSafeAddress(ethers.utils.getAddress(safeAddress))
+      // setSafeAddress(ethers.utils.getAddress(safeAddress))
       try{
         if(safeSdk){
           const owners = await safeSdk.getOwners()
           const threshold = await safeSdk.getThreshold()
           setOwners(owners)
           setThreshold(threshold)
-          console.log("owners",owners,"threshold",threshold)
+          console.log("owners", owners, "threshold", threshold)
         }
-        console.log("CHECKING TRANSACTIONS....",safeAddress)
-        const transactions = await serviceClient.getPendingTransactions(safeAddress)
-        console.log("Pending transactions:", transactions)
-        setTransactions(transactions.results)
+        // console.log("CHECKING TRANSACTIONS....",safeAddress)
+        // const transactions = await serviceClient.getPendingTransactions(safeAddress)
+        // console.log("Pending transactions:", transactions)
+        // setTransactions(transactions.results)
       }catch(e){
         console.log("ERROR POLLING FROM SAFE:",e)
       }
@@ -157,9 +312,6 @@ export default function GnosisStarterView({
   useEffect(()=>{
     //walletConnectUrl
     if(walletConnectUrl){
-
-
-
       const connector = new WalletConnect(
         {
           // Required
@@ -271,6 +423,8 @@ export default function GnosisStarterView({
         <div style={{padding:8}}>
         {owners&&owners.length>0?(
           <>
+            <b>Waku Status:</b>
+            <p>{wakuStatus}</p>
             <b>Signers:</b>
             <List
               bordered
@@ -399,7 +553,7 @@ export default function GnosisStarterView({
               const partialTx = {
                 to: checksumForm,
                 data,
-                value: ethers.utils.parseEther(value?value.toString():"0").toString()
+                value: ethers.utils.parseEther(value ? Number(value).toString() : "0").toString()
               }
               try{
                 await proposeSafeTransaction(partialTx)
@@ -481,11 +635,11 @@ export default function GnosisStarterView({
 
             return (
               <div style={{borderBottom:"1px solid #ddd"}}>
-                {console.log("transaction",transaction)}
-                <h1>#{transaction.nonce}</h1>
-                <Address value={transaction.to} ensProvider={mainnetProvider} />
-                <p>Data: {transaction.data}</p>
-                <p>Value: {ethers.utils.formatEther(transaction.value)} ETH</p>
+                {console.log("transaction", transaction)}
+                <h1>#{transaction.transactionData.nonce}</h1>
+                <Address value={transaction.transactionData.to} ensProvider={mainnetProvider} />
+                <p>Data: {transaction.transactionData.data}</p>
+                <p>Value: {ethers.utils.formatEther(transaction.transactionData.value)} ETH</p>
                 <div style={{padding:32}}>
                   {buttonDisplay}
                 </div>
