@@ -38,7 +38,7 @@ message WakuSafeTransactionData {
   required uint64 nonce = 10;
 }
 `);
-const VERSION = "v1";
+const VERSION = "v1.2"; // Bump this version if you want to ignore all previous messages sent to Waku network.
 
 export default function GnosisStarterView({
   userSigner,
@@ -61,8 +61,8 @@ export default function GnosisStarterView({
   const [wakuStatus, setWakuStatus] = React.useState("None");
 
   const OWNERS = [
-    "0x7F2436d628137A1a4f07631b1E09e37455f4aDAe",
-    "0xCdBD6e282cE2A0f5244883F4D8e70dA0dA62aa13"
+    "0x34aA3F359A9D614239015126635CE7732c18fDF3",
+    "0xa81a6a910FeD20374361B35C451a4a44F86CeD46"
   ]
   const THRESHOLD = 2
 
@@ -78,7 +78,7 @@ export default function GnosisStarterView({
     // If Waku status is Connected, return
     if (wakuStatus === "Connected") return;
     // If Waku status is None, it means we need to start Waku;
-    if (wakuStatus === "None") {
+    if (!waku || wakuStatus === "None") {
       setWakuStatus("Starting");
       const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
       // Create Waku
@@ -101,9 +101,9 @@ export default function GnosisStarterView({
         setWakuStatus("Connected");
       });
     }
-  }, [waku, wakuStatus]);
+  }, [waku, wakuStatus, safeAddress]);
 
-  const wakuLightPush = async (message, contentTopic) => {
+  const wakuLightPush = useCallback(async (message, contentTopic) => {
     console.log("Waku Light Push:", message);
     const encodedMessage = encodeWakuSafeSignatureMsg(message);
     const wakuMessage = await WakuMessage.fromBytes(encodedMessage, contentTopic, {
@@ -122,7 +122,7 @@ export default function GnosisStarterView({
         ),
       });
     }
-  }
+  }, [waku]);
 
   const deploySafe = useCallback(async (owners, threshold) => {
     if (!safeFactory) return
@@ -155,7 +155,6 @@ export default function GnosisStarterView({
     const safeSignature = await safeSdk.signTransactionHash(safeTxHash)
 
     // Here we send our signature message to the Waku network;
-    await waku.waitForRemotePeer(); // wait for the light push peer to be ready;
     const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
     const message = {
       txHash: safeTxHash,
@@ -231,7 +230,7 @@ export default function GnosisStarterView({
     return proto.WakuSafeMessage.encode(wakuMessage)
   }, []);
 
-  const decodeWakuSafeSignatureMsg = useCallback((wakuMessage) => {
+  const decodeAndProcessWakuSafeSignatureMsg = useCallback((wakuMessage) => {
     if (!wakuMessage.payload) return;
 
     const { txHash, signatures, transactionData, done, version } = proto.WakuSafeMessage.decode(
@@ -247,13 +246,27 @@ export default function GnosisStarterView({
       done: done,
       version: version,
     };
-    if (!transaction.version || transaction.version !== VERSION)
+    if (typeof transaction.version === 'undefined' || transaction.version !== VERSION)
       return // drop messages with different version
     console.log("Waku Message Decoded:", transaction);
     // update messages with the same txHash
+    let duplicatedTransactions = transactions.filter(tx => tx.txHash === transactions.txHash);
+    console.log("Updating", duplicatedTransactions.length, "Messages");
+    for (const duplicatedTransaction of duplicatedTransactions) {
+      // merge signatures
+      for (const oldSignature of duplicatedTransaction.signatures) {
+        const signatureNotIncluded = (
+          transaction.signatures.filter(
+            signature => signature.signer === oldSignature.signer
+          )
+        ).length === 0;
+        if (signatureNotIncluded) transaction.signatures.push(oldSignature);
+      }
+    }
+    // delete outdated transactions
     let memTransactions = transactions.filter(tx => tx.txHash !== transaction.txHash);
     memTransactions.push(transaction);
-    // clean done message
+    // delete done message
     memTransactions = memTransactions.filter(tx => typeof tx.done !== 'undefined' && tx.done === 0);
     console.log("mem", memTransactions);
     setTransactions(memTransactions);
@@ -265,12 +278,12 @@ export default function GnosisStarterView({
     const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
 
     // Pass the content topic to only process messages related to your dApp
-    waku.relay.addObserver(decodeWakuSafeSignatureMsg, [contentTopic]);
+    waku.relay.addObserver(decodeAndProcessWakuSafeSignatureMsg, [contentTopic]);
 
     if (wakuStatus === "Connected") {
       console.log("Loading messages from Waku Store");
       const processWakuStoreMessages = (retrievedMessages) => {
-        retrievedMessages.map(decodeWakuSafeSignatureMsg).filter(Boolean);
+        retrievedMessages.map(decodeAndProcessWakuSafeSignatureMsg).filter(Boolean);
       };
       waku.store
         .queryHistory([contentTopic], { callback: processWakuStoreMessages })
@@ -281,25 +294,19 @@ export default function GnosisStarterView({
 
     // `cleanUp` is called when the component is unmounted, see ReactJS doc.
     return function cleanUp() {
-      waku.relay.deleteObserver(decodeWakuSafeSignatureMsg, [contentTopic]);
+      waku.relay.deleteObserver(decodeAndProcessWakuSafeSignatureMsg, [contentTopic]);
     };
-  }, [waku, wakuStatus, decodeWakuSafeSignatureMsg, safeAddress]);
+  }, [waku, wakuStatus, decodeAndProcessWakuSafeSignatureMsg, safeAddress]);
 
   usePoller(async () => {
     if(safeAddress){
-      // setSafeAddress(ethers.utils.getAddress(safeAddress))
       try{
         if(safeSdk){
           const owners = await safeSdk.getOwners()
           const threshold = await safeSdk.getThreshold()
           setOwners(owners)
           setThreshold(threshold)
-          console.log("owners", owners, "threshold", threshold)
         }
-        // console.log("CHECKING TRANSACTIONS....",safeAddress)
-        // const transactions = await serviceClient.getPendingTransactions(safeAddress)
-        // console.log("Pending transactions:", transactions)
-        // setTransactions(transactions.results)
       }catch(e){
         console.log("ERROR POLLING FROM SAFE:",e)
       }

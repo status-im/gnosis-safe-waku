@@ -1,14 +1,23 @@
-# 🏗 scaffold-eth - 🦉 Gnosis Safe Starter Kit
+# Gnosis Safe with Waku Network
 
-> 🧫 Prototype frontend experiences that settle to a [Gnosis Safe](https://gnosis-safe.io/)
+This project replaces Gnosis Transaction History Service with Waku Network to achieve fully decentralization.
 
+Waku is a decentralized network and family of protocols that allow censorship-resistant, private, peer-to-peer communication. It is the infrastructure backbone of the Status app, a Web3 decentralized messenger app. The JavaScript implementation of Waku, js-waku, enables dApps and webapps to utilize the Waku network for off-chain message transmission.
+
+### Implementation Detail
+
+This project integrates Waku network to gnosis initiate gnosis multi-party multi-signature transactions. In detail, when an owner of a safe initiate a safe transaction, the transaction data will be broadcasting to the Waku network with **symmetric encryption**, instead of sending to the centralized Gnosis Transaction History Service. When other owners want to confirm this transaction. If other owners are online, the transaction data will be sent to them directly using Waku relay. If other owners are offline, the transaction data will be sent to the Waku store for them to pull when they are online.
+
+The message is versioned so this workflow can be upgraded anytime.
+
+See https://youtu.be/NoglkQAL7Mc for demonstration.
 
 ### Installation
 
 ```sh
-git clone -b gnosis-starter-kit https://github.com/austintgriffith/scaffold-eth.git gnosis-starter-kit
+git clone -b gnosis-starter-kit https://github.com/Soptq/gnosis-safe-waku.git gnosis-safe-waku
 
-cd gnosis-starter-kit
+cd gnosis-safe-waku
 
 yarn install
 
@@ -16,8 +25,6 @@ yarn start
 ```
 
 > 👉 Visit your frontend at http://localhost:3000
-
-
 
 
 ## Deployment
@@ -81,7 +88,6 @@ yarn start
 ---
 
 
-
 ## Support
 
-Join the [telegram support chat 💬](https://t.me/joinchat/KByvmRe5wkR-8F_zz6AjpA) to ask questions and find others building with 🏗 scaffold-eth!
+Please don't hesitate to open issues.
