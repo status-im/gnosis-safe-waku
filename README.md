@@ -6,11 +6,11 @@ Waku is a decentralized network and family of protocols that allow censorship-re
 
 ### Implementation Detail
 
-This project integrates Waku network to gnosis initiate gnosis multi-party multi-signature transactions. In detail, when an owner of a safe initiate a safe transaction, the transaction data will be broadcasting to the Waku network with **symmetric encryption**, instead of sending to the centralized Gnosis Transaction History Service. When other owners want to confirm this transaction. If other owners are online, the transaction data will be sent to them directly using Waku relay. If other owners are offline, the transaction data will be sent to the Waku store for them to pull when they are online.
+This project integrates Waku network to gnosis for initiating gnosis multi-party multi-signature transactions. In detail, when an owner of a safe initiates a safe transaction, the transaction data will be broadcasting to the Waku network with **symmetric encryption**, instead of sending to the centralized Gnosis Transaction History Service. When other owners want to confirm this transaction, if other owners are online, the transaction data will be sent to them directly using **Waku relay**. On the other hand, if other owners are offline, the transaction data will be sent to the **Waku store** for them to pull when they are online.
 
-The message is versioned so this workflow can be upgraded anytime.
+The content topic is versioned so that this workflow can be upgraded anytime.
 
-See https://youtu.be/NoglkQAL7Mc for demonstration.
+See https://youtu.be/NoglkQAL7Mc for a simple demonstration.
 
 ### Installation
 
