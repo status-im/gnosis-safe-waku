@@ -16,8 +16,7 @@ message WakuSafeMessage {
   required string txHash = 1;  
   repeated WakuSafeSignature signatures = 2;
   required WakuSafeTransactionData transactionData = 3;
-  optional uint64 done = 4;
-  optional string version = 5;
+  required uint64 done = 4;
 }
 
 message WakuSafeSignature {
@@ -38,7 +37,7 @@ message WakuSafeTransactionData {
   required uint64 nonce = 10;
 }
 `);
-const VERSION = "v1.2"; // Bump this version if you want to ignore all previous messages sent to Waku network.
+const VERSION = "1.2"; // Bump this version if you want to ignore all previous messages sent to Waku network.
 
 export default function GnosisStarterView({
   userSigner,
@@ -80,7 +79,7 @@ export default function GnosisStarterView({
     // If Waku status is None, it means we need to start Waku;
     if (!waku || wakuStatus === "None") {
       setWakuStatus("Starting");
-      const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+      const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
       // Create Waku
       Waku.create({
         bootstrap: { default: true },
@@ -155,7 +154,7 @@ export default function GnosisStarterView({
     const safeSignature = await safeSdk.signTransactionHash(safeTxHash)
 
     // Here we send our signature message to the Waku network;
-    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
     const message = {
       txHash: safeTxHash,
       signatures: [{
@@ -174,8 +173,7 @@ export default function GnosisStarterView({
         refundReceiver: safeTransaction.data.refundReceiver,
         nonce: safeTransaction.data.nonce
       },
-      done: 0,
-      version: VERSION,
+      done: 0
     }
     await wakuLightPush(message, contentTopic);
   }, [safeSdk, safeAddress])
@@ -192,7 +190,7 @@ export default function GnosisStarterView({
     }
     const newMessage = transaction;
     newMessage.signatures.push({signer: signature.signer, signature: signature.data});
-    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
     await wakuLightPush(newMessage, contentTopic);
   }, [safeSdk, safeAddress])
 
@@ -215,7 +213,7 @@ export default function GnosisStarterView({
     console.log(receipt)
     const newMessage = transaction;
     newMessage.done = 1;
-    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
     await wakuLightPush(newMessage, contentTopic);
   }, [safeSdk])
 
@@ -233,7 +231,7 @@ export default function GnosisStarterView({
   const decodeAndProcessWakuSafeSignatureMsg = useCallback((wakuMessage) => {
     if (!wakuMessage.payload) return;
 
-    const { txHash, signatures, transactionData, done, version } = proto.WakuSafeMessage.decode(
+    const { txHash, signatures, transactionData, done} = proto.WakuSafeMessage.decode(
       wakuMessage.payload
     );
 
@@ -244,10 +242,7 @@ export default function GnosisStarterView({
       signatures: signatures,
       transactionData: transactionData,
       done: done,
-      version: version,
     };
-    if (typeof transaction.version === 'undefined' || transaction.version !== VERSION)
-      return // drop messages with different version
     console.log("Waku Message Decoded:", transaction);
     // update messages with the same txHash
     let duplicatedTransactions = transactions.filter(tx => tx.txHash === transactions.txHash);
@@ -275,7 +270,7 @@ export default function GnosisStarterView({
   React.useEffect(() => {
     if (!waku) return;
 
-    const contentTopic = `/gnosis-safe/1/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
 
     // Pass the content topic to only process messages related to your dApp
     waku.relay.addObserver(decodeAndProcessWakuSafeSignatureMsg, [contentTopic]);
