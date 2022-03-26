@@ -1,10 +1,9 @@
 import { Button, Card, DatePicker, Divider, Input, List, Progress, Slider, Spin, Switch, notification } from "antd";
 import React, { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
-import { Address, Balance, EtherInput, AddressInput } from "../components";
+import { Address, Balance, EtherInput, AddressInput, OwnerInput } from "../components";
 import { usePoller, useLocalStorage, useBalance, useSafeSdk } from "../hooks";
 import { EthSignSignature } from './EthSignSignature'
-import WalletConnect from "@walletconnect/client";
 import { Waku, WakuMessage, utils } from "js-waku";
 import { keccak256 } from "ethers/lib/utils";
 import protons from "protons";
@@ -37,7 +36,7 @@ message WakuSafeTransactionData {
   required uint64 nonce = 10;
 }
 `);
-const VERSION = "1.2"; // Bump this version if you want to ignore all previous messages sent to Waku network.
+const VERSION = "1.0.0"; // Bump this version if you want to ignore all previous messages sent to Waku network.
 
 export default function GnosisStarterView({
   userSigner,
@@ -59,13 +58,7 @@ export default function GnosisStarterView({
   const [waku, setWaku] = React.useState(undefined);
   const [wakuStatus, setWakuStatus] = React.useState("None");
 
-  const OWNERS = [
-    "0x34aA3F359A9D614239015126635CE7732c18fDF3",
-    "0xa81a6a910FeD20374361B35C451a4a44F86CeD46"
-  ]
-  const THRESHOLD = 2
-
-  const [safeAddress, setSafeAddress] = useLocalStorage("deployedSafe")
+  const [safeAddress, setSafeAddress] = useState("")
   const [ deploying, setDeploying ] = useState()
   const safeBalance = useBalance(localProvider, safeAddress);
   const { safeSdk, safeFactory } = useSafeSdk(userSigner, safeAddress)
@@ -79,7 +72,7 @@ export default function GnosisStarterView({
     // If Waku status is None, it means we need to start Waku;
     if (!waku || wakuStatus === "None") {
       setWakuStatus("Starting");
-      const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
+      const contentTopic = `/gnosis-safe/${targetNetwork.chainId}/${VERSION}/${safeAddress}/proto` // prepare our content topic;
       // Create Waku
       Waku.create({
         bootstrap: { default: true },
@@ -103,7 +96,7 @@ export default function GnosisStarterView({
   }, [waku, wakuStatus, safeAddress]);
 
   const wakuLightPush = useCallback(async (message, contentTopic) => {
-    console.log("Waku Light Push:", message);
+    console.log("Waku Light Push:", message, contentTopic);
     const encodedMessage = encodeWakuSafeSignatureMsg(message);
     const wakuMessage = await WakuMessage.fromBytes(encodedMessage, contentTopic, {
       symKey: hexToBytes(
@@ -154,7 +147,7 @@ export default function GnosisStarterView({
     const safeSignature = await safeSdk.signTransactionHash(safeTxHash)
 
     // Here we send our signature message to the Waku network;
-    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${targetNetwork.chainId}/${VERSION}/${safeAddress}/proto` // prepare our content topic;
     const message = {
       txHash: safeTxHash,
       signatures: [{
@@ -190,7 +183,7 @@ export default function GnosisStarterView({
     }
     const newMessage = transaction;
     newMessage.signatures.push({signer: signature.signer, signature: signature.data});
-    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${targetNetwork.chainId}/${VERSION}/${safeAddress}/proto` // prepare our content topic;
     await wakuLightPush(newMessage, contentTopic);
   }, [safeSdk, safeAddress])
 
@@ -213,7 +206,7 @@ export default function GnosisStarterView({
     console.log(receipt)
     const newMessage = transaction;
     newMessage.done = 1;
-    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${targetNetwork.chainId}/${VERSION}/${safeAddress}/proto` // prepare our content topic;
     await wakuLightPush(newMessage, contentTopic);
   }, [safeSdk])
 
@@ -270,7 +263,7 @@ export default function GnosisStarterView({
   React.useEffect(() => {
     if (!waku) return;
 
-    const contentTopic = `/gnosis-safe/${VERSION}/${safeAddress}/proto` // prepare our content topic;
+    const contentTopic = `/gnosis-safe/${targetNetwork.chainId}/${VERSION}/${safeAddress}/proto` // prepare our content topic;
 
     // Pass the content topic to only process messages related to your dApp
     waku.relay.addObserver(decodeAndProcessWakuSafeSignatureMsg, [contentTopic]);
@@ -308,111 +301,111 @@ export default function GnosisStarterView({
     }
   },3333);
 
-  const [ walletConnectUrl, setWalletConnectUrl ] = useState()
-  const [ connected, setConnected ] = useState()
+  // const [ walletConnectUrl, setWalletConnectUrl ] = useState()
+  // const [ connected, setConnected ] = useState()
 
-  useEffect(()=>{
-    //walletConnectUrl
-    if(walletConnectUrl){
-      const connector = new WalletConnect(
-        {
-          // Required
-          uri: walletConnectUrl,
-          // Required
-          clientMeta: {
-            description: "Gnosis Safe Starter Kit",
-            url: "https://github.com/austintgriffith/scaffold-eth/tree/gnosis-starter-kit",
-            icons: ["http://s3.amazonaws.com/pix.iemoji.com/images/emoji/apple/ios-12/256/owl.png"],
-            name: "Gnosis Safe Starter Kit",
-          },
-        }/*,
-        {
-          // Optional
-          url: "<YOUR_PUSH_SERVER_URL>",
-          type: "fcm",
-          token: token,
-          peerMeta: true,
-          language: language,
-        }*/
-      );
-
-      // Subscribe to session requests
-      connector.on("session_request", (error, payload) => {
-        if (error) {
-          throw error;
-        }
-
-        console.log("SESSION REQUEST")
-        // Handle Session Request
-
-        connector.approveSession({
-          accounts: [                 // required
-            safeAddress
-          ],
-          chainId: targetNetwork.chainId               // required
-        })
-
-        setConnected(true)
-
-
-        /* payload:
-        {
-          id: 1,
-          jsonrpc: '2.0'.
-          method: 'session_request',
-          params: [{
-            peerId: '15d8b6a3-15bd-493e-9358-111e3a4e6ee4',
-            peerMeta: {
-              name: "WalletConnect Example",
-              description: "Try out WalletConnect v1.0",
-              icons: ["https://example.walletconnect.org/favicon.ico"],
-              url: "https://example.walletconnect.org"
-            }
-          }]
-        }
-        */
-      });
-
-      // Subscribe to call requests
-      connector.on("call_request", (error, payload) => {
-        if (error) {
-          throw error;
-        }
-
-        console.log("REQUEST PERMISSION TO:",payload,payload.params[0])
-        // Handle Call Request
-        console.log("SETTING TO",payload.params[0].to)
-        setTo(payload.params[0].to)
-        setData(payload.params[0].data?payload.params[0].data:"0x0000")
-        setValue(payload.params[0].value)
-        /* payload:
-        {
-          id: 1,
-          jsonrpc: '2.0'.
-          method: 'eth_sign',
-          params: [
-            "0xbc28ea04101f03ea7a94c1379bc3ab32e65e62d3",
-            "My email is john@doe.com - 1537836206101"
-          ]
-        }
-        */
-        /*connector.approveRequest({
-          id: payload.id,
-          result: "0x41791102999c339c844880b23950704cc43aa840f3739e365323cda4dfa89e7a"
-        });*/
-
-      });
-
-      connector.on("disconnect", (error, payload) => {
-        if (error) {
-          throw error;
-        }
-        console.log("disconnect")
-
-        // Delete connector
-      });
-    }
-  },[ walletConnectUrl ])
+  // useEffect(()=>{
+  //   //walletConnectUrl
+  //   if(walletConnectUrl){
+  //     const connector = new WalletConnect(
+  //       {
+  //         // Required
+  //         uri: walletConnectUrl,
+  //         // Required
+  //         clientMeta: {
+  //           description: "Gnosis Safe Starter Kit",
+  //           url: "https://github.com/austintgriffith/scaffold-eth/tree/gnosis-starter-kit",
+  //           icons: ["http://s3.amazonaws.com/pix.iemoji.com/images/emoji/apple/ios-12/256/owl.png"],
+  //           name: "Gnosis Safe Starter Kit",
+  //         },
+  //       }/*,
+  //       {
+  //         // Optional
+  //         url: "<YOUR_PUSH_SERVER_URL>",
+  //         type: "fcm",
+  //         token: token,
+  //         peerMeta: true,
+  //         language: language,
+  //       }*/
+  //     );
+  //
+  //     // Subscribe to session requests
+  //     connector.on("session_request", (error, payload) => {
+  //       if (error) {
+  //         throw error;
+  //       }
+  //
+  //       console.log("SESSION REQUEST")
+  //       // Handle Session Request
+  //
+  //       connector.approveSession({
+  //         accounts: [                 // required
+  //           safeAddress
+  //         ],
+  //         chainId: targetNetwork.chainId               // required
+  //       })
+  //
+  //       setConnected(true)
+  //
+  //
+  //       /* payload:
+  //       {
+  //         id: 1,
+  //         jsonrpc: '2.0'.
+  //         method: 'session_request',
+  //         params: [{
+  //           peerId: '15d8b6a3-15bd-493e-9358-111e3a4e6ee4',
+  //           peerMeta: {
+  //             name: "WalletConnect Example",
+  //             description: "Try out WalletConnect v1.0",
+  //             icons: ["https://example.walletconnect.org/favicon.ico"],
+  //             url: "https://example.walletconnect.org"
+  //           }
+  //         }]
+  //       }
+  //       */
+  //     });
+  //
+  //     // Subscribe to call requests
+  //     connector.on("call_request", (error, payload) => {
+  //       if (error) {
+  //         throw error;
+  //       }
+  //
+  //       console.log("REQUEST PERMISSION TO:",payload,payload.params[0])
+  //       // Handle Call Request
+  //       console.log("SETTING TO",payload.params[0].to)
+  //       setTo(payload.params[0].to)
+  //       setData(payload.params[0].data?payload.params[0].data:"0x0000")
+  //       setValue(payload.params[0].value)
+  //       /* payload:
+  //       {
+  //         id: 1,
+  //         jsonrpc: '2.0'.
+  //         method: 'eth_sign',
+  //         params: [
+  //           "0xbc28ea04101f03ea7a94c1379bc3ab32e65e62d3",
+  //           "My email is john@doe.com - 1537836206101"
+  //         ]
+  //       }
+  //       */
+  //       /*connector.approveRequest({
+  //         id: payload.id,
+  //         result: "0x41791102999c339c844880b23950704cc43aa840f3739e365323cda4dfa89e7a"
+  //       });*/
+  //
+  //     });
+  //
+  //     connector.on("disconnect", (error, payload) => {
+  //       if (error) {
+  //         throw error;
+  //       }
+  //       console.log("disconnect")
+  //
+  //       // Delete connector
+  //     });
+  //   }
+  // },[ walletConnectUrl ])
 
 
   let safeInfo
@@ -447,10 +440,11 @@ export default function GnosisStarterView({
     )
   }else{
     safeInfo = (
-      <div style={{padding:32}}>
-        <Button loading={deploying} onClick={() => deploySafe(OWNERS, THRESHOLD)} type={"primary"} >
-          DEPLOY SAFE
-        </Button>
+      <div>
+        <div style={{ padding: 4 }}>
+          <OwnerInput placeholder="Add Owner Address" autofocus loading={deploying} onDeploy={deploySafe}/>
+        </div>
+        <Divider />
         <div> or enter existing address: </div>
         <AddressInput ensProvider={mainnetProvider} onChange={(addr)=>{
           if(ethers.utils.isAddress(addr)){
@@ -464,8 +458,6 @@ export default function GnosisStarterView({
   }
 
 
-
-
   let proposeTransaction
   if(!safeAddress){
     proposeTransaction = ""
@@ -476,17 +468,17 @@ export default function GnosisStarterView({
       <>
         <Divider />
 
-        {connected?"✅":""}<Input
-          style={{width:"70%"}}
-          placeholder={"wallet connect url"}
-          value={walletConnectUrl}
-          disabled={connected}
-          onChange={(e)=>{
-            setWalletConnectUrl(e.target.value)
-          }}
-        />{connected?<span onClick={()=>{setConnected(false);}}>X</span>:""}
+        {/*{connected?"✅":""}<Input*/}
+        {/*  style={{width:"70%"}}*/}
+        {/*  placeholder={"wallet connect url"}*/}
+        {/*  value={walletConnectUrl}*/}
+        {/*  disabled={connected}*/}
+        {/*  onChange={(e)=>{*/}
+        {/*    setWalletConnectUrl(e.target.value)*/}
+        {/*  }}*/}
+        {/*/>{connected?<span onClick={()=>{setConnected(false);}}>X</span>:""}*/}
 
-        <Divider />
+        {/*<Divider />*/}
         <h5>Propose Transaction:</h5>
 
         <div style={{ margin: 8}}>

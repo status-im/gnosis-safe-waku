@@ -44,7 +44,10 @@ const { ethers } = require("ethers");
 */
 
 /// 📡 What chain are your contracts deployed to?
-const targetNetwork = NETWORKS.rinkeby; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
+const queryParams = new URLSearchParams(window.location.search);
+const chainId = queryParams.get("chain");
+const targetNetwork = NETWORK(parseInt(chainId));
+// const targetNetwork = NETWORKS.rinkeby; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
 
 // 😬 Sorry for all the console logging
 const DEBUG = true;
@@ -401,16 +404,16 @@ function App(props) {
               Mainnet DAI
             </Link>
           </Menu.Item>*/}
-          <Menu.Item key="/contract">
-            <Link
-              onClick={() => {
-                setRoute("/contract");
-              }}
-              to="/contract"
-            >
-              Contract
-            </Link>
-          </Menu.Item>
+          {/*<Menu.Item key="/contract">*/}
+          {/*  <Link*/}
+          {/*    onClick={() => {*/}
+          {/*      setRoute("/contract");*/}
+          {/*    }}*/}
+          {/*    to="/contract"*/}
+          {/*  >*/}
+          {/*    Contract*/}
+          {/*  </Link>*/}
+          {/*</Menu.Item>*/}
         </Menu>
 
         <Switch>
@@ -456,15 +459,15 @@ function App(props) {
             />
             */}
           </Route>
-          <Route path="/contract">
-              <Contract
-               name="YourContract"
-               signer={userSigner}
-               provider={localProvider}
-               address={address}
-               blockExplorer={blockExplorer}
-             />
-          </Route>
+          {/*<Route path="/contract">*/}
+          {/*    <Contract*/}
+          {/*     name="YourContract"*/}
+          {/*     signer={userSigner}*/}
+          {/*     provider={localProvider}*/}
+          {/*     address={address}*/}
+          {/*     blockExplorer={blockExplorer}*/}
+          {/*   />*/}
+          {/*</Route>*/}
         </Switch>
       </BrowserRouter>
 

@@ -1,9 +1,10 @@
-import { Button } from "antd";
+import {Button, Dropdown, Menu} from "antd";
 import React from "react";
 import { useThemeSwitcher } from "react-css-theme-switcher";
 import Address from "./Address";
 import Balance from "./Balance";
 import Wallet from "./Wallet";
+import {DownOutlined} from "@ant-design/icons";
 
 /*
   ~ What it does? ~
@@ -104,9 +105,44 @@ export default function Account({
     </span>
   );
 
+  const getChainURL = (chain) => {
+    return window.location.origin + "?chain=" + chain
+  }
+
+  const menu = (
+    <Menu>
+      <Menu.Item key="0">
+        <a href={getChainURL(1)}>Mainnet</a>
+      </Menu.Item>
+      <Menu.Item key="1">
+        <a href={getChainURL(4)}>Rinkeby</a>
+      </Menu.Item>
+      <Menu.Item key="2">
+        <a href={getChainURL(5)}>Goerli</a>
+      </Menu.Item>
+      <Menu.Item key="3">
+        <a href={getChainURL(10)}>Optimism</a>
+      </Menu.Item>
+      <Menu.Item key="4">
+        <a href={getChainURL(100)}>Xdai</a>
+      </Menu.Item>
+      <Menu.Item key="5">
+        <a href={getChainURL(137)}>Polygon</a>
+      </Menu.Item>
+      <Menu.Item key="6">
+        <a href={getChainURL(42161)}>Arbitrum</a>
+      </Menu.Item>
+    </Menu>
+  );
+
   return (
     <div>
       {display}
+      <Dropdown overlay={menu} trigger={['click']}>
+        <a className="ant-dropdown-link" onClick={e => e.preventDefault()}>
+          Select Chains <DownOutlined />
+        </a>
+      </Dropdown>,
       {modalButtons}
     </div>
   );

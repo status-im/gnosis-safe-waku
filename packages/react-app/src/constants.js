@@ -151,4 +151,5 @@ export const NETWORK = chainId => {
       return NETWORKS[n];
     }
   }
+  return NETWORKS.rinkeby;
 };
