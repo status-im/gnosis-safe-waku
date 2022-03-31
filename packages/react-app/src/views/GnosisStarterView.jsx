@@ -98,7 +98,7 @@ export default function GnosisStarterView({
     const encodedMessage = encodeWakuSafeSignatureMsg(message);
     const wakuMessage = await WakuMessage.fromBytes(encodedMessage, contentTopic, {
       symKey: utils.hexToBytes(
-        keccak256(Buffer.from(contentTopic, "utf-8"))
+        utils.keccak256Buf(Buffer.from(contentTopic, "utf-8"))
       )
     });
     const ack = await waku.lightPush.push(wakuMessage);
