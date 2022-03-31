@@ -414,10 +414,11 @@ export default function GnosisStarterView({
               }
 
               const checksumForm = ethers.utils.getAddress(to)
+              console.log(value);
               const partialTx = {
                 to: checksumForm,
                 data,
-                value: ethers.utils.parseEther(value ? Number(value).toString() : "0").toString()
+                value: ethers.utils.parseEther(value ? (Math.ceil(value * 1e4) / 1e4).toString() : "0").toString()
               }
               try{
                 await proposeSafeTransaction(partialTx)
