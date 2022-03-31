@@ -5,9 +5,7 @@ import { Address, Balance, EtherInput, AddressInput, OwnerInput } from "../compo
 import { usePoller, useLocalStorage, useBalance, useSafeSdk } from "../hooks";
 import { EthSignSignature } from './EthSignSignature'
 import { Waku, WakuMessage, utils } from "js-waku";
-import { keccak256 } from "ethers/lib/utils";
 import protons from "protons";
-import {hexToBytes} from "js-waku/build/main/lib/utils";
 
 // Waku message format
 const proto = protons(`
@@ -77,7 +75,7 @@ export default function GnosisStarterView({
       Waku.create({
         bootstrap: { default: true },
         decryptionKeys: [utils.hexToBytes(
-          keccak256(Buffer.from(contentTopic, "utf-8"))
+          utils.keccak256Buf(Buffer.from(contentTopic, "utf-8"))
         )]
       }).then((waku) => {
         // Once done, put it in the state
@@ -99,7 +97,7 @@ export default function GnosisStarterView({
     console.log("Waku Light Push:", message, contentTopic);
     const encodedMessage = encodeWakuSafeSignatureMsg(message);
     const wakuMessage = await WakuMessage.fromBytes(encodedMessage, contentTopic, {
-      symKey: hexToBytes(
+      symKey: utils.hexToBytes(
         keccak256(Buffer.from(contentTopic, "utf-8"))
       )
     });
