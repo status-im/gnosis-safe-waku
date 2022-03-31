@@ -13021,10 +13021,10 @@ js-tokens@^3.0.2:
   resolved "https://registry.yarnpkg.com/js-tokens/-/js-tokens-3.0.2.tgz#9866df395102130e38f7f996bceb65443209c25b"
   integrity sha1-mGbfOVECEw449/mWvOtlRDIJwls=
 
-js-waku@^0.19.1-babel.0:
-  version "0.19.1-babel.0"
-  resolved "https://registry.yarnpkg.com/js-waku/-/js-waku-0.19.1-babel.0.tgz#d446313965deb22f7b1a7c386039db8a2ef84d2d"
-  integrity sha512-vpIMCY4xyMr4+f2mYd96uh5DEU0q6/b0c4uQpgnyQYdxKU0/aT2JbN5cPjL2+oI/IkubiS4VY61m1Wjx4jXnfQ==
+js-waku@^0.20.0:
+  version "0.20.0"
+  resolved "https://registry.yarnpkg.com/js-waku/-/js-waku-0.20.0.tgz#9e8dad7feb4eaec55a654035e46366f86b120746"
+  integrity sha512-eR8b5wWCOGSNEAddcEJ+OBLoCKWCYkXJtEKlWpfOlh29OKDE9ik4pHdKnGCZJyXlrYMTFggzXLY9hG5iRat/+g==
   dependencies:
     "@chainsafe/libp2p-noise" "^5.0.0"
     "@ethersproject/rlp" "^5.5.0"
@@ -13036,7 +13036,7 @@ js-waku@^0.19.1-babel.0:
     js-sha3 "^0.8.0"
     libp2p "^0.36.2"
     libp2p-bootstrap "^0.14.0"
-    libp2p-gossipsub "^0.13.0"
+    libp2p-gossipsub "0.13.0"
     libp2p-mplex "^0.10.4"
     libp2p-websockets "^0.16.1"
     multiaddr "^10.0.1"
@@ -13773,7 +13773,7 @@ libp2p-crypto@~0.16.1:
     tweetnacl "^1.0.0"
     ursa-optional "~0.10.0"
 
-libp2p-gossipsub@^0.13.0:
+libp2p-gossipsub@0.13.0:
   version "0.13.0"
   resolved "https://registry.yarnpkg.com/libp2p-gossipsub/-/libp2p-gossipsub-0.13.0.tgz#a70db85139c62d7a8ad273be3ba01d1c9f338f7b"
   integrity sha512-xy2jRZGmJpjy++Di6f1admtjve8Fx0z5l8NISTQS282egwbRMmTPE6/UeYktb6hNGAgtSTIwXdHjXmMOiTarFA==

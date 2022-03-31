@@ -1,12 +1,18 @@
-# Gnosis Safe with Waku Network
+# Waku Powered Gnosis Safe
 
-This project replaces Gnosis Transaction History Service with Waku Network to achieve fully decentralization.
+This project replaces Gnosis Transaction History Service with Waku to achieve full decentralization.
 
-Waku is a decentralized network and family of protocols that allow censorship-resistant, private, peer-to-peer communication. It is the infrastructure backbone of the Status app, a Web3 decentralized messenger app. The JavaScript implementation of Waku, js-waku, enables dApps and webapps to utilize the Waku network for off-chain message transmission.
+Waku is a decentralized network and family of protocols that enable censorship-resistant, private, peer-to-peer communication.
+It is the infrastructure backbone of the Status app, a Web3 decentralized messenger app.
+The JavaScript implementation of Waku, js-waku, enables dApps and webapps to utilize the Waku network for off-chain message transmission.
 
 ### Implementation Detail
 
-This project integrates Waku network to gnosis for initiating gnosis multi-party multi-signature transactions. In detail, when an owner of a safe initiates a safe transaction, the transaction data will be broadcasting to the Waku network with **symmetric encryption**, instead of sending to the centralized Gnosis Transaction History Service. When other owners want to confirm this transaction, if other owners are online, the transaction data will be sent to them directly using **Waku relay**. On the other hand, if other owners are offline, the transaction data will be sent to the **Waku store** for them to pull when they are online.
+This project integrates Waku to Gnosis Safe for initiating multi-party multi-signature transactions.
+When an owner of a safe initiates a Safe transaction, the transaction data will be broadcast to the Waku network with **symmetric encryption**, instead of sending to the centralized Gnosis Transaction History Service.
+Other owners who need to confirm the transaction would either receive the request via:
+- Waku Relay, if they were online when the request was originally made, or,
+- Waku Store, if they were offline when the request was originall made.
 
 The content topic is versioned so that this workflow can be upgraded anytime.
 
