@@ -33,14 +33,7 @@ yarn start
 
 > ( ⛽️ Grab **Rinkeby** from the [faucet](https://faucet.rinkeby.io/) )
 
-![image](https://user-images.githubusercontent.com/2653167/129985013-b3562b2c-88b5-4180-9bbe-379808eb4267.png)
-
----
-
-> 📝 Edit `GnosisStarterView.jsx` in `packages/react-app/src/views` to change the deploy parameters.
-
-![image](https://user-images.githubusercontent.com/2653167/130370221-8f3c55c4-fe74-4e1a-b472-e2d4f1fa7428.png)
-
+![image](https://imgur.com/m2aMqge.png)
 
 (Setup *two* browsers with different addresses and add them both as `OWNERS` with a `THRESHOLD` of **2**.)
 
